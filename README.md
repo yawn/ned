@@ -1,8 +1,8 @@
-# Nitro Enclave demo (`ned`)
+# Nitro Enclave Demo (`ned`)
 
 <img src=".github/logo.png" width="400">
 
-This is a demo for [AWS Nitro Enclave](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) capabilities that attempts to fill in the gaps and inconsistencies in the official documentation (as of January 2025).
+This is a demo for [AWS Nitro Enclave](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) capabilities that attempts to fill in the gaps and inconsistencies in the official documentation (as of January 2025). The background to this is discussed in the blog post "[Nitro Enclaves: what's in CiphertextForRecipient?](https://5blockchains.com/posts/nitro-enclaves/)".
 
 Probably unneccesary **disclaimer**: making attestation documents available to the host (like this demo does) defeats the entire purpose of using Nitro Enclaves and should not be used for anything else than testing.
 
