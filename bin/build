@@ -1,0 +1,20 @@
+#!/bin/bash
+STACK_NAME=NED
+
+set -euo pipefail
+
+rm -rf dist
+mkdir -p dist
+tar cf dist/dist.tar Dockerfile main.go go.* network/* bin/build-remote
+gzip -9 dist/dist.tar
+
+ID=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='HostID'].OutputValue" --output text --no-cli-pager)
+
+PAYLOAD=$(base64 -i dist/dist.tar.gz)
+
+echo Connecting to $ID ...
+
+aws ssm start-session \
+    --document-name AWS-StartInteractiveCommand \
+    --target $ID \
+    --parameters command="mkdir -p /home/ssm-user/dist && chown ssm-user:ssm-user /home/ssm-user/dist && rm -rf /home/ssm-user/dist/* && cd /home/ssm-user/dist && echo $PAYLOAD | base64 -d | gunzip -c | tar x && bin/build-remote"

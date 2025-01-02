@@ -1,0 +1,13 @@
+#!/bin/bash -e
+RUN_HOST=${1:-false}
+STACK_NAME=NED
+
+AMI=$(aws ec2 describe-images --owners amazon --output text --no-cli-pager \
+    --query 'Images | reverse(sort_by(@, &CreationDate))[0].ImageId' \
+    --filters \
+        "Name=architecture,Values=arm64" \
+        "Name=name,Values=al2023-ami-2023*")
+
+echo "Using AMI $AMI"
+
+aws cloudformation deploy --template-file bin/setup.yml --stack-name $STACK_NAME --capabilities CAPABILITY_NAMED_IAM --parameter-overrides CreateHost=$RUN_HOST ImageID=$AMI

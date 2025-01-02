@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Nitro Enclave Demo
+Conditions:
+  CreateHost: !Equals [!Ref CreateHost, "true"]
+Parameters:
+  CreateHost:
+    Type: String
+  ImageID:
+    Type: String
+  HostInstanceType:
+    Type: String
+    Default: c8g.large
+Resources:
+  CMK:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: NED CMK
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: admin
+        Statement:
+          - Sid: Everybody can do almost everything
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - "kms:Create*"
+              - "kms:Describe*"
+              - "kms:Disable*"
+              - "kms:Enable*"
+              - "kms:Encrypt*" # NOTE: no decrypt here
+              - "kms:GetKeyPolicy"
+              - "kms:Schedule*"
+              - "kms:Put*"
+              - "kms:Tag*"
+              - "kms:Untag*"
+              - "kms:Update*"
+            Resource: "*"
+          - Sid: Decrypt requires some kind of enclave
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root" # TODO: pin to role
+            Action:
+              - "kms:Decrypt"
+            Resource: "*"
+            Condition:
+              "Null":
+                "kms:RecipientAttestation:PCR0": "false" # NOTE: it's not 0x.... like the docs say
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      Origin: AWS_KMS
+      PendingWindowInDays: 7
+  Host:
+    Type: AWS::EC2::Instance
+    Condition: CreateHost
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref HostTemplate
+        Version: !GetAtt HostTemplate.LatestVersionNumber
+      InstanceType: !Ref HostInstanceType
+  HostProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref HostRole
+  HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: NEDHostRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedEC2InstanceDefaultPolicy
+      Policies:
+        - PolicyName: Encrypt
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                Resource: !GetAtt CMK.Arn
+        - PolicyName: Decrypt
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+  HostSetupDocumentAssociation:
+    Type: AWS::SSM::Association
+    Condition: CreateHost
+    Properties:
+      Name: !Ref HostSetupDocument
+      Targets:
+        - Key: InstanceIds
+          Values:
+            - !Ref Host
+  HostSetupDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Command
+      Content:
+        schemaVersion: "2.2"
+        description: "Setup script for NED host"
+        mainSteps:
+          - action: "aws:runShellScript"
+            name: "setup"
+            inputs:
+              runCommand:
+                - "sudo yum update -y"
+
+                - "sudo yum install -y golang tmux zsh"
+                - "sudo echo '[[ $PWD = /usr/bin ]] && cd ~' > /home/ssm-user/.zshrc && chown ssm-user:ssm-user /home/ssm-user/.zshrc"
+
+                - "sudo yum install -y docker"
+                - "sudo systemctl enable docker.service --now"
+                - "sudo usermod -aG docker ssm-user"
+
+                - "sudo dnf install aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel -y"
+                - "sudo usermod -aG ne ssm-user"
+                - "sudo sed -i 's/cpu_count: 2/cpu_count: 1/' /etc/nitro_enclaves/allocator.yaml"
+                - "sudo sed -i 's/memory_mib: 512/memory_mib: 1024/' /etc/nitro_enclaves/allocator.yaml"
+                - "sudo systemctl enable nitro-enclaves-allocator.service --now"
+  HostTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: ned-host
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              Encrypted: true
+              VolumeSize: 32
+              VolumeType: gp3
+        EnclaveOptions:
+          Enabled: true
+        IamInstanceProfile:
+          Name: !Ref HostProfile
+        ImageId: !Ref ImageID
+        InstanceMarketOptions:
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: one-time
+        MetadataOptions:
+          HttpTokens: optional
+          InstanceMetadataTags: enabled
+        TagSpecifications:
+          - ResourceType: "instance"
+            Tags:  
+            - Key: KeyID
+              Value: !Ref CMK
+Outputs:
+  HostID:
+    Condition: CreateHost
+    Value: !GetAtt Host.InstanceId
+  KeyID:
+    Value: !Ref CMK

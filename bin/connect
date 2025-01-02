@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+STACK_NAME=NED
+
+ID=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='HostID'].OutputValue" --output text --no-cli-pager)
+
+echo Connecting to $ID ...
+
+aws ssm start-session --document-name AWS-StartInteractiveCommand  --parameters command="zsh -l" --target $ID

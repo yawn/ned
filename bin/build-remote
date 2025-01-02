@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+
+export DOCKER_CLI_HINTS=false
+docker build -f Dockerfile -t ned .
+
+nitro-cli terminate-enclave --enclave-name ned || true
+rm -f ned.eif 
+
+nitro-cli build-enclave --docker-uri ned:latest --name ned --output-file ned.eif 
+
+nitro-cli run-enclave --cpu-count 1 --eif-path ned.eif --enclave-cid 20 --memory 1024
+
+docker run --env AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region) --privileged --rm -it ned
