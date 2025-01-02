@@ -122,3 +122,19 @@ CMS_ContentInfo:
     unprotectedAttrs:
       <ABSENT>
 ```
+
+The result of a successful decryption operation will yield an additional "additionalEventData" field in the CloudTrail log event that contains data about the PCRs of the enclave:
+
+```
+    "additionalEventData": {
+        "recipient": {
+            "attestationDocumentEnclavePCR4": "15u0...b9Xa",
+            "attestationDocumentEnclavePCR8": "AAAA...AAAA",
+            "attestationDocumentModuleId": "i-04ac...faf3-enc01941...98cd",
+            "attestationDocumentEnclaveImageDigest": "T37s...7ToS",
+            "attestationDocumentEnclavePCR1": "O0p+...l00D",
+            "attestationDocumentEnclavePCR3": "lX2u...Tq6q",
+            "attestationDocumentEnclavePCR2": "Ovyr...eSxR"
+        }
+    },
+```
